@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenieTech — Grand Écran</title>
+<style>
+:root{--bg:#050914;--panel:#0b1324;--text:#f8fafc;--muted:#94a3b8;--green:#22c55e;--red:#ef4444;--gold:#facc15;--line:rgba(255,255,255,.1)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%}
+body{background:radial-gradient(circle at 50% 30%,#14213a 0%,var(--bg) 68%);color:var(--text);font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+.screen{width:100vw;height:100vh;display:flex;flex-direction:column;padding:3vh 5vw 2vh;text-align:center}
+.header{height:13vh;display:flex;align-items:flex-start;justify-content:center}
+.logo{max-width:min(300px,28vw);max-height:11vh;object-fit:contain}
+.topbar{width:100%;display:flex;justify-content:space-between;align-items:center;gap:20px;border-bottom:1px solid var(--line);padding:0 1vw 1.5vh}
+.phase{font-size:clamp(16px,2vw,30px);font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.questionNo{font-size:clamp(18px,2.2vw,34px);font-weight:800}
+.main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;padding:2vh 0}
+.questionLabel{font-size:clamp(16px,2vw,28px);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:2vh}
+.question{font-size:clamp(30px,4.4vw,72px);line-height:1.12;font-weight:800;max-width:88vw;text-wrap:balance}
+.timer{margin-top:3vh;font-size:clamp(54px,8vw,120px);line-height:1;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.timer.running{color:var(--green)}
+.timer.warning{color:var(--gold)}
+.timer.danger{color:var(--red);animation:dangerPulse .8s infinite}
+.timer.off{color:var(--muted)}
+@keyframes dangerPulse{50%{opacity:.45}}
+.buzzPanel{min-height:10vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.buzzLabel{font-size:clamp(15px,1.7vw,26px);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.team{font-size:clamp(34px,5vw,78px);font-weight:900;margin-top:.5vh;line-height:1}
+.team.active{color:var(--green);animation:buzzIn .35s ease-out}
+.team.waiting{color:var(--muted)}
+@keyframes buzzIn{0%{transform:scale(1.12);opacity:.2}100%{transform:scale(1);opacity:1}}
+.status{font-size:clamp(16px,1.8vw,28px);font-weight:800;margin-top:1vh;text-transform:uppercase;letter-spacing:.08em}
+.status.open{color:var(--green)}.status.locked{color:var(--text)}.status.off{color:var(--muted)}
+.footer{height:4vh;display:flex;align-items:end;justify-content:center;color:var(--muted);font-size:12px;opacity:.5}
+.error{color:var(--red);opacity:1}
+.hidden{visibility:hidden}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="header"><img class="logo" src="logo genitech.png" alt="GenieTech"></div>
+
+  <div class="topbar">
+    <div id="phase" class="phase">GENIETECH</div>
+    <div id="questionNo" class="questionNo">—</div>
+  </div>
+
+  <main class="main">
+    <div id="questionLabel" class="questionLabel">Question</div>
+    <div id="question" class="question">En attente de la prochaine question</div>
+    <div id="timer" class="timer off">--:--</div>
+  </main>
+
+  <div id="buzzPanel" class="buzzPanel">
+    <div id="buzzLabel" class="buzzLabel">Buzzer</div>
+    <div id="team" class="team waiting">PRÊTS ?</div>
+    <div id="status" class="status open">À VOUS DE JOUER</div>
+  </div>
+
+  <div class="footer"><div id="connection">Connexion...</div></div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION
+// ============================================================
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuJMaKi6EvPAlEGRKmtxV994zRJz36m12iD9nSJPzglmi3gDxW1zgyTGEgAISwfpgZNg/exec
+";
+const POLL_INTERVAL_MS = 500;
+
+let previousTeam = null;
+
+// ============================================================
+// SYNCHRONISATION AVEC APPS SCRIPT
+// ============================================================
+async function poll(){
+  const connection=document.getElementById('connection');
+  try{
+    const response=await fetch(SCRIPT_URL+'?t='+Date.now(),{method:'GET',cache:'no-store'});
+    if(!response.ok) throw new Error('HTTP '+response.status);
+    const state=await response.json();
+    connection.textContent='';
+    connection.className='';
+    applyState(state);
+  }catch(error){
+    connection.textContent='Connexion au serveur indisponible';
+    connection.className='error';
+    // On conserve le dernier état connu pendant une micro-coupure.
+  }
+}
+
+function applyState(data){
+  document.getElementById('phase').textContent = data.phaseLabel || 'GENIETECH';
+
+  document.getElementById('questionNo').textContent =
+    data.questionNumber != null ? ('QUESTION '+data.questionNumber+(data.totalQuestions ? ' / '+data.totalQuestions : '')) : '—';
+
+  document.getElementById('question').textContent =
+    data.questionText || 'En attente de la prochaine question';
+
+  updateTimer(data);
+  updateBuzz(data);
+}
+
+function updateTimer(data){
+  const timer=document.getElementById('timer');
+
+  let remaining=null;
+  if(data.questionEndAt != null){
+    remaining=Math.max(0,Math.ceil((data.questionEndAt-Date.now())/1000));
+  }
+
+  if(remaining==null || !data.questionActive){
+    timer.textContent='--:--';
+    timer.className='timer off';
+    return;
+  }
+
+  timer.textContent=formatTime(remaining);
+  timer.className='timer '+(remaining<=5?'danger':remaining<=10?'warning':'running');
+}
+
+function updateBuzz(data){
+  const team=document.getElementById('team');
+  const label=document.getElementById('buzzLabel');
+  const status=document.getElementById('status');
+
+  // Question directe / probleme : pas de buzzer, le jury designe l'equipe.
+  if(data.questionType && !data.buzzerEnabled){
+    label.textContent = data.questionType === 'PROBLEME' ? 'PROBLÈME' : 'QUESTION DIRECTE';
+    if(data.activeTeam){
+      team.textContent=data.activeTeam;
+      team.className='team active';
+      status.textContent='L’ÉQUIPE RÉPOND';
+      status.className='status locked';
+    }else{
+      team.textContent='';
+      team.className='team waiting';
+      status.textContent='Le jury attribue la réponse';
+      status.className='status off';
+    }
+    return;
+  }
+
+  const activeTeam=data.activeTeam || null;
+
+  if(activeTeam){
+    label.textContent='BUZZÉ !';
+    team.textContent=activeTeam;
+    team.className='team active';
+    status.textContent='L’ÉQUIPE RÉPOND';
+    status.className='status locked';
+
+    const key=String(activeTeam)+'|'+String(data.questionId ?? '');
+    if(key!==previousTeam){
+      team.classList.remove('active');
+      void team.offsetWidth;
+      team.classList.add('active');
+    }
+    previousTeam=key;
+  }else if(data.canBuzz){
+    label.textContent='BUZZER OUVERT';
+    team.textContent='PRÊTS ?';
+    team.className='team waiting';
+    status.textContent='À VOUS DE JOUER';
+    status.className='status open';
+  }else{
+    label.textContent='BUZZER';
+    team.textContent='—';
+    team.className='team waiting';
+    status.textContent='EN ATTENTE';
+    status.className='status off';
+  }
+}
+
+function formatTime(seconds){
+  const m=Math.floor(seconds/60);
+  const s=seconds%60;
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+poll();
+setInterval(poll,POLL_INTERVAL_MS);
+</script>
+</body>
+</html>
