@@ -35,8 +35,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .timerBig.danger{color:var(--red)}
 .timerBig.warning{color:var(--gold)}
 .timerBig.running{color:var(--green)}
+.timerBig.off{color:var(--muted)}
 
 .activeTeam{font-size:22px;font-weight:900;text-align:center;color:var(--green);margin:6px 0}
+.msg{text-align:center;font-size:15px;color:var(--muted);padding:6px 0;min-height:40px}
 
 .btnRow{display:flex;gap:10px;flex-wrap:wrap}
 .btn{flex:1;min-width:120px;padding:16px 10px;border-radius:12px;border:none;font-weight:800;font-size:15px;color:white;cursor:pointer;box-shadow:var(--shadow)}
@@ -44,6 +46,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .btn.good{background:#16a34a}
 .btn.bad{background:#dc2626}
 .btn.neutral{background:#64748b}
+.btn.skip{background:#8b5cf6}
 .btn:disabled{opacity:.35;cursor:default;box-shadow:none}
 .btn:active:not(:disabled){transform:translateY(2px)}
 
@@ -55,7 +58,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .ctxBtn{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer}
 .ctxBtn.active{background:var(--blue);color:white;border-color:var(--blue)}
 
-.msg{text-align:center;font-size:15px;color:var(--muted);padding:6px 0}
 .dangerZone{opacity:.85}
 .dangerZone button{background:var(--redBg);color:var(--red);border:1px solid #fecaca;box-shadow:none}
 </style>
@@ -100,10 +102,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
     <div class="btnRow" style="margin-top:12px">
       <button class="btn primary" id="btnStart" onclick="startQuestion()">Question suivante</button>
+      <button class="btn skip" id="btnSkip" onclick="skipQuestion()">Passer</button>
       <button class="btn neutral" id="btnSub" onclick="startSubsidiaire()">Subsidiaire</button>
-    </div>
-    <div class="btnRow" style="margin-top:10px">
-      <button class="btn neutral" id="btnSkip" onclick="skipQuestion()" disabled>⏭ Passer (personne n'a buzzé)</button>
     </div>
     <div class="btnRow" style="margin-top:10px">
       <button class="btn good" id="btnCorrect" onclick="markCorrect()" disabled>✓ Bonne réponse</button>
@@ -120,7 +120,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
 <script>
   // ==== A CONFIGURER ====
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuJMaKi6EvPAlEGRKmtxV994zRJz36m12iD9nSJPzglmi3gDxW1zgyTGEgAISwfpgZNg/exec";
+  const SCRIPT_URL = "REMPLACER_PAR_URL_APPS_SCRIPT";
   const POLL_INTERVAL_MS = 1000;
   // =======================
 
@@ -135,7 +135,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       conn.textContent = '';
       lastState = data;
       render(data);
-      maybeAutoTimeout(data);
     }catch(err){
       conn.textContent = 'connexion instable...';
     }
@@ -154,7 +153,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
   function contextTeams(data){
     if(data.phase === 'Finale'){
-      return (data.teams||[]).filter(t => String(t.finale).trim() === 'Oui');
+      return (data.teams||[]).filter(t => String(t.qualifiee).trim() === 'Oui');
     }
     return (data.teams||[]).filter(t => t.duel === data.duel);
   }
@@ -186,6 +185,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     const btnStart = document.getElementById('btnStart');
     const btnSkip = document.getElementById('btnSkip');
 
+    // ✅ Mise à jour du chrono
+    updateTimer(data);
+
     if(!data.questionId){
       qMeta.innerHTML = '';
       qText.textContent = 'Aucune question active';
@@ -213,27 +215,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       qAnswer.style.display = 'none';
     }
 
-    // Chrono
-    let remaining = null;
-    if(data.questionEndAt != null){
-      remaining = Math.max(0, Math.ceil((data.questionEndAt - Date.now())/1000));
-    }
-    if(remaining==null || !data.questionActive){
-      timerBig.textContent = '--:--';
-      timerBig.className = 'timerBig off';
-    }else{
-      timerBig.textContent = formatTime(remaining);
-      timerBig.className = 'timerBig ' + (remaining<=5?'danger':remaining<=10?'warning':'running');
-    }
-
-    msg.textContent = data.messageEcran || '';
+    // ✅ Message en fonction de la phase
+    btnSkip.disabled = false;
 
     // Question DIRECTE / PROBLEME
     if(data.questionType && !data.buzzerEnabled){
       btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
-      btnSkip.disabled = data.etat !== 'QUESTION_ACTIVE';
+      btnSkip.disabled = true;
       if(data.etat === 'QUESTION_ACTIVE'){
-        // en attente que le jury designe l'equipe
         teamPickZone.style.display = 'block';
         const teams = contextTeams(data);
         teamPickRow.innerHTML = '';
@@ -248,25 +237,43 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
         activeLine.style.display = 'none';
         btnCorrect.disabled = true;
         btnWrong.disabled = true;
+        msg.textContent = 'Sélectionnez l\'équipe qui répond';
       }else if(data.etat === 'BUZZ_RECU'){
         teamPickZone.style.display = 'none';
         activeLine.style.display = 'block';
         activeLine.textContent = data.activeTeam + ' répond';
         btnCorrect.disabled = false;
         btnWrong.disabled = false;
+        msg.textContent = data.messageEcran || '';
       }else{
         teamPickZone.style.display = 'none';
         activeLine.style.display = 'none';
         btnCorrect.disabled = true;
         btnWrong.disabled = true;
+        msg.textContent = data.messageEcran || '';
       }
       return;
     }
 
-    // Question BUZZ / SUBSIDIAIRE
+    // BUZZ / SUBSIDIAIRE
     teamPickZone.style.display = 'none';
     btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
-    btnSkip.disabled = data.etat !== 'QUESTION_ACTIVE';
+
+    // ✅ Message "Équipe B a la main" en Phase 3
+    if(data.tempsPhase === 'ATTENTE_SECOND'){
+      const teams = contextTeams(data);
+      const alreadyAnswered = data.eliminatedTeams || [];
+      const otherTeam = teams.find(t => alreadyAnswered.indexOf(t.equipe) === -1);
+      if(otherTeam){
+        msg.textContent = '⏳ ' + otherTeam.equipe + ' a la main (' + getRemainingTime(data) + 's)';
+      } else {
+        msg.textContent = data.messageEcran || '';
+      }
+    } else if(data.activeTeam){
+      msg.textContent = data.messageEcran || '';
+    } else {
+      msg.textContent = data.messageEcran || '';
+    }
 
     if(data.activeTeam){
       activeLine.style.display = 'block';
@@ -278,6 +285,39 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       btnCorrect.disabled = true;
       btnWrong.disabled = true;
     }
+  }
+
+  // ✅ Fonction pour récupérer le temps restant
+  function getRemainingTime(data){
+    if(data.questionEndAt != null && data.questionActive){
+      return Math.max(0, Math.ceil((data.questionEndAt - Date.now()) / 1000));
+    }
+    return 0;
+  }
+
+  // ✅ Mise à jour du chrono
+  function updateTimer(data){
+    const timerBig = document.getElementById('timerBig');
+
+    let remaining = null;
+    if(data.questionEndAt != null && data.questionActive){
+      remaining = Math.max(0, Math.ceil((data.questionEndAt - Date.now()) / 1000));
+    }
+
+    if(remaining == null || !data.questionActive){
+      timerBig.textContent = '--:--';
+      timerBig.className = 'timerBig off';
+      return;
+    }
+
+    timerBig.textContent = formatTime(remaining);
+    timerBig.className = 'timerBig ' + (remaining<=5?'danger':remaining<=10?'warning':'running');
+  }
+
+  function formatTime(seconds){
+    const m=Math.floor(seconds/60);
+    const s=seconds%60;
+    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
   }
 
   async function callAction(payload){
@@ -298,6 +338,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   }
 
   function startQuestion(){ callAction({ action:'startQuestion', mode:'auto' }); }
+  function skipQuestion(){ callAction({ action:'skipQuestion' }); }
 
   function startSubsidiaire(){
     if(!lastState) return;
@@ -308,34 +349,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   function assignDirect(equipe){ callAction({ action:'assignDirect', equipe:equipe }); }
   function markCorrect(){ callAction({ action:'correct' }); }
   function markWrong(){ callAction({ action:'wrong' }); }
-  function skipQuestion(){ callAction({ action:'skipQuestion' }); }
   function setContext(phase,duel){ callAction({ action:'setContext', phase:phase, duel:duel }); }
-
-  // Timeout automatique : si le chrono expire pendant qu'une equipe repond,
-  // on marque mauvaise reponse automatiquement (rouvre le buzzer pour l'autre equipe).
-  let lastAutoWrongKey = null;
-  function maybeAutoTimeout(data){
-    if(busy) return;
-    if(data.etat !== 'BUZZ_RECU' || data.questionEndAt == null){
-      lastAutoWrongKey = null;
-      return;
-    }
-    if(Date.now() <= data.questionEndAt) return;
-    const key = String(data.questionId) + '|' + String(data.activeTeam);
-    if(key === lastAutoWrongKey) return;
-    lastAutoWrongKey = key;
-    callAction({ action:'wrong' });
-  }
 
   function resetGame(){
     if(!confirm('Réinitialiser toute la partie ? Cette action est irréversible.')) return;
     callAction({ action:'resetGame' });
-  }
-
-  function formatTime(seconds){
-    const m=Math.floor(seconds/60);
-    const s=seconds%60;
-    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
   }
 
   function escapeHtml(str){
