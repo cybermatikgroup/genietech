@@ -74,6 +74,11 @@
     border-radius: 12px; border: 1px solid var(--neutral); background: #111827; color: var(--text);
   }
   .setup button { padding: 14px 28px; font-size: 16px; font-weight: 700; border-radius: 12px; border: none; background: var(--accent); color: white; }
+  .teamBtn { width: 100%; max-width: 320px; padding: 18px 20px; font-size: 20px; font-weight: 800; border-radius: 14px; border: 2px solid var(--neutral); background: #111827; color: var(--text); cursor: pointer; }
+  .teamBtn:active { transform: translateY(2px); }
+  .teamBtn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .teamBtn:disabled:active { transform: none; }
+  .setupHint { font-size: 12px; opacity: 0.5; margin-top: 4px; min-height: 16px; }
   .conn { font-size: 12px; opacity: 0.4; }
 </style>
 </head>
@@ -81,8 +86,12 @@
 
 <div id="setup" class="setup" style="display:none;">
   <div class="brand">GENIETECH · BUZZER</div>
-  <input id="nameInput" type="text" placeholder="Nom de l'equipe" autocomplete="off">
-  <button onclick="confirmName()">Confirmer</button>
+  <div style="font-size:14px;opacity:.6;margin-bottom:4px">Choisissez votre équipe</div>
+  <button class="teamBtn" id="btn-Genius509" onclick="selectTeam('Genius509')">Genius509</button>
+  <button class="teamBtn" id="btn-DataTitans" onclick="selectTeam('DataTitans')">DataTitans</button>
+  <button class="teamBtn" id="btn-MapouTech" onclick="selectTeam('MapouTech')">MapouTech</button>
+  <button class="teamBtn" id="btn-AlphaCrush" onclick="selectTeam('AlphaCrush')">AlphaCrush</button>
+  <div class="setupHint" id="setupHint"></div>
 </div>
 
 <div id="screen" class="screen" style="display:none;">
@@ -136,13 +145,40 @@
       startScreen();
     } else {
       document.getElementById("setup").style.display = "flex";
+      applyTeamRestriction();
     }
   }
 
-  function confirmName() {
-    const val = document.getElementById("nameInput").value.trim();
-    if (!val) return;
-    teamName = val;
+  async function applyTeamRestriction() {
+    const hint = document.getElementById("setupHint");
+    try {
+      const res = await fetch(SCRIPT_URL + "?t=" + Date.now(), { method: "GET", cache: "no-store" });
+      const data = await res.json();
+      const teams = data.teams || [];
+
+      let allowed;
+      if (data.phase === "Finale") {
+        allowed = teams.filter(t => String(t.qualifiee).trim() === "Oui").map(t => t.equipe);
+        hint.textContent = "Seules les équipes qualifiées pour la Finale peuvent buzzer";
+      } else {
+        allowed = teams.filter(t => t.duel === data.duel).map(t => t.equipe);
+        hint.textContent = "Duel actif : " + (data.duel || "—");
+      }
+
+      ["Genius509", "DataTitans", "MapouTech", "AlphaCrush"].forEach(name => {
+        const btn = document.getElementById("btn-" + name);
+        if (btn) btn.disabled = allowed.indexOf(name) === -1;
+      });
+    } catch (err) {
+      // Si l'etat n'est pas joignable, on laisse les 4 boutons actifs
+      // pour ne pas bloquer completement la mise en place.
+      document.getElementById("setupHint").textContent =
+        "Impossible de vérifier le duel actif — vérifiez avant de choisir";
+    }
+  }
+
+  function selectTeam(name) {
+    teamName = name;
     document.getElementById("setup").style.display = "none";
     startScreen();
   }
