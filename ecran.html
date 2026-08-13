@@ -59,16 +59,46 @@ body{background:radial-gradient(circle at 50% 30%,#14213a 0%,var(--bg) 68%);colo
   </div>
 
   <div class="footer"><div id="connection">Connexion...</div></div>
+
+  <div id="soundOverlay" style="position:fixed;inset:0;background:rgba(5,9,20,.94);display:flex;align-items:center;justify-content:center;z-index:50;">
+    <button id="enableSoundBtn" style="padding:18px 32px;border-radius:14px;border:none;background:#22c55e;color:#04120a;font-weight:900;font-size:clamp(16px,2vw,22px);cursor:pointer;">🔊 Activer le son</button>
+  </div>
 </div>
 
 <script>
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuJMaKi6EvPAlEGRKmtxV994zRJz36m12iD9nSJPzglmi3gDxW1zgyTGEgAISwfpgZNg/exec"; // URL /exec du Web App
+const SCRIPT_URL = "REMPLACER_PAR_URL_APPS_SCRIPT";
 const POLL_INTERVAL_MS = 500;
 
 let previousTeam = null;
+let audioCtx = null;
+let soundEnabled = false;
+let firstPoll = true;
+
+document.getElementById('enableSoundBtn').addEventListener('click', () => {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  soundEnabled = true;
+  document.getElementById('soundOverlay').style.display = 'none';
+});
+
+function playBuzzSound(){
+  if(!soundEnabled || !audioCtx) return;
+  try{
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.35);
+  }catch(err){ /* son non supporte, on ignore silencieusement */ }
+}
 
 // ============================================================
 // SYNCHRONISATION AVEC APPS SCRIPT
@@ -100,6 +130,7 @@ function applyState(data){
 
   updateTimer(data);
   updateBuzz(data);
+  firstPoll=false;
 }
 
 function updateTimer(data){
@@ -156,6 +187,7 @@ function updateBuzz(data){
       team.classList.remove('active');
       void team.offsetWidth;
       team.classList.add('active');
+      if(!firstPoll) playBuzzSound();
     }
     previousTeam=key;
   }else if(data.canBuzz){
