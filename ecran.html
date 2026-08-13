@@ -139,4 +139,81 @@ function updateTimer(data){
 
   let remaining=null;
   if(data.questionEndAt != null && data.questionActive){
-   
+    remaining=Math.max(0,Math.ceil((data.questionEndAt-Date.now())/1000));
+  }
+
+  if(remaining==null || !data.questionActive){
+    timer.textContent='--:--';
+    timer.className='timer off';
+    return;
+  }
+
+  timer.textContent=formatTime(remaining);
+  timer.className='timer '+(remaining<=5?'danger':remaining<=10?'warning':'running');
+}
+
+function updateBuzz(data){
+  const team=document.getElementById('team');
+  const label=document.getElementById('buzzLabel');
+  const status=document.getElementById('status');
+
+  // Question directe / probleme : pas de buzzer
+  if(data.questionType && !data.buzzerEnabled){
+    label.textContent = data.questionType === 'PROBLEME' ? 'PROBLÈME' : 'QUESTION DIRECTE';
+    if(data.activeTeam){
+      team.textContent=data.activeTeam;
+      team.className='team active';
+      status.textContent='L’ÉQUIPE RÉPOND';
+      status.className='status locked';
+    }else{
+      team.textContent='';
+      team.className='team waiting';
+      status.textContent='Le jury attribue la réponse';
+      status.className='status off';
+    }
+    return;
+  }
+
+  const activeTeam=data.activeTeam || null;
+
+  if(activeTeam){
+    label.textContent='BUZZÉ !';
+    team.textContent=activeTeam;
+    team.className='team active';
+    status.textContent='L’ÉQUIPE RÉPOND';
+    status.className='status locked';
+
+    const key=String(activeTeam)+'|'+String(data.questionId ?? '');
+    if(key!==previousTeam){
+      team.classList.remove('active');
+      void team.offsetWidth;
+      team.classList.add('active');
+      if(!firstPoll) playBuzzSound();
+    }
+    previousTeam=key;
+  }else if(data.canBuzz){
+    label.textContent='BUZZER OUVERT';
+    team.textContent='PRÊTS ?';
+    team.className='team waiting';
+    status.textContent='À VOUS DE JOUER';
+    status.className='status open';
+  }else{
+    label.textContent='BUZZER';
+    team.textContent='—';
+    team.className='team waiting';
+    status.textContent='EN ATTENTE';
+    status.className='status off';
+  }
+}
+
+function formatTime(seconds){
+  const m=Math.floor(seconds/60);
+  const s=seconds%60;
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+poll();
+setInterval(poll,POLL_INTERVAL_MS);
+</script>
+</body>
+</html>
