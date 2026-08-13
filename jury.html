@@ -103,6 +103,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <button class="btn neutral" id="btnSub" onclick="startSubsidiaire()">Subsidiaire</button>
     </div>
     <div class="btnRow" style="margin-top:10px">
+      <button class="btn neutral" id="btnSkip" onclick="skipQuestion()" disabled>⏭ Passer (personne n'a buzzé)</button>
+    </div>
+    <div class="btnRow" style="margin-top:10px">
       <button class="btn good" id="btnCorrect" onclick="markCorrect()" disabled>✓ Bonne réponse</button>
       <button class="btn bad" id="btnWrong" onclick="markWrong()" disabled>✗ Mauvaise réponse</button>
     </div>
@@ -132,6 +135,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       conn.textContent = '';
       lastState = data;
       render(data);
+      maybeAutoTimeout(data);
     }catch(err){
       conn.textContent = 'connexion instable...';
     }
@@ -180,6 +184,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     const btnCorrect = document.getElementById('btnCorrect');
     const btnWrong = document.getElementById('btnWrong');
     const btnStart = document.getElementById('btnStart');
+    const btnSkip = document.getElementById('btnSkip');
 
     if(!data.questionId){
       qMeta.innerHTML = '';
@@ -193,6 +198,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       btnCorrect.disabled = true;
       btnWrong.disabled = true;
       btnStart.disabled = false;
+      btnSkip.disabled = true;
       return;
     }
 
@@ -225,6 +231,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     // Question DIRECTE / PROBLEME
     if(data.questionType && !data.buzzerEnabled){
       btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
+      btnSkip.disabled = data.etat !== 'QUESTION_ACTIVE';
       if(data.etat === 'QUESTION_ACTIVE'){
         // en attente que le jury designe l'equipe
         teamPickZone.style.display = 'block';
@@ -259,6 +266,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     // Question BUZZ / SUBSIDIAIRE
     teamPickZone.style.display = 'none';
     btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
+    btnSkip.disabled = data.etat !== 'QUESTION_ACTIVE';
 
     if(data.activeTeam){
       activeLine.style.display = 'block';
@@ -300,7 +308,24 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   function assignDirect(equipe){ callAction({ action:'assignDirect', equipe:equipe }); }
   function markCorrect(){ callAction({ action:'correct' }); }
   function markWrong(){ callAction({ action:'wrong' }); }
+  function skipQuestion(){ callAction({ action:'skipQuestion' }); }
   function setContext(phase,duel){ callAction({ action:'setContext', phase:phase, duel:duel }); }
+
+  // Timeout automatique : si le chrono expire pendant qu'une equipe repond,
+  // on marque mauvaise reponse automatiquement (rouvre le buzzer pour l'autre equipe).
+  let lastAutoWrongKey = null;
+  function maybeAutoTimeout(data){
+    if(busy) return;
+    if(data.etat !== 'BUZZ_RECU' || data.questionEndAt == null){
+      lastAutoWrongKey = null;
+      return;
+    }
+    if(Date.now() <= data.questionEndAt) return;
+    const key = String(data.questionId) + '|' + String(data.activeTeam);
+    if(key === lastAutoWrongKey) return;
+    lastAutoWrongKey = key;
+    callAction({ action:'wrong' });
+  }
 
   function resetGame(){
     if(!confirm('Réinitialiser toute la partie ? Cette action est irréversible.')) return;
