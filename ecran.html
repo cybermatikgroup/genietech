@@ -9,15 +9,15 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%}
 body{background:radial-gradient(circle at 50% 30%,#14213a 0%,var(--bg) 68%);color:var(--text);font-family:Arial,Helvetica,sans-serif;overflow:hidden}
-.screen{width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4vh 6vw;text-align:center;gap:4vh}
-.question{font-size:clamp(28px,4.2vw,64px);line-height:1.3;font-weight:800;max-width:90vw;white-space:pre-line}
-.timer{font-size:clamp(60px,9vw,140px);line-height:1;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.screen{width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3vh 6vw;text-align:center;gap:2.2vh;overflow:hidden}
+.question{font-size:clamp(18px,2.6vw,38px);line-height:1.35;font-weight:800;max-width:92vw;white-space:pre-line}
+.timer{font-size:clamp(40px,5.5vw,84px);line-height:1;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .timer.running{color:var(--green)}
 .timer.warning{color:var(--gold)}
 .timer.danger{color:var(--red);animation:dangerPulse .8s infinite}
 .timer.off{color:var(--muted)}
 @keyframes dangerPulse{50%{opacity:.45}}
-.team{font-size:clamp(36px,5.5vw,84px);font-weight:900;line-height:1;color:var(--green);min-height:1.2em}
+.team{font-size:clamp(24px,3.4vw,52px);font-weight:900;line-height:1;color:var(--green);min-height:1.2em}
 .team.active{animation:buzzIn .35s ease-out}
 @keyframes buzzIn{0%{transform:scale(1.12);opacity:.2}100%{transform:scale(1);opacity:1}}
 .connErr{position:fixed;bottom:10px;left:0;right:0;text-align:center;color:var(--red);font-size:12px;opacity:.7}
@@ -40,7 +40,7 @@ body{background:radial-gradient(circle at 50% 30%,#14213a 0%,var(--bg) 68%);colo
 // ============================================================
 // CONFIGURATION
 // ============================================================
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuJMaKi6EvPAlEGRKmtxV994zRJz36m12iD9nSJPzglmi3gDxW1zgyTGEgAISwfpgZNg/exec"; // URL /exec du Web App
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuJMaKi6EvPAlEGRKmtxV994zRJz36m12iD9nSJPzglmi3gDxW1zgyTGEgAISwfpgZNg/exec";
 const POLL_INTERVAL_MS = 500;
 
 let previousTeam = null;
