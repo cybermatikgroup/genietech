@@ -110,7 +110,7 @@
 
 <script>
   // ==== A CONFIGURER ====
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuJMaKi6EvPAlEGRKmtxV994zRJz36m12iD9nSJPzglmi3gDxW1zgyTGEgAISwfpgZNg/exec"; // URL /exec du Web App
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuJMaKi6EvPAlEGRKmtxV994zRJz36m12iD9nSJPzglmi3gDxW1zgyTGEgAISwfpgZNg/exec";
   const POLL_INTERVAL_MS = 1000;
   // =======================
 
@@ -170,8 +170,6 @@
         if (btn) btn.disabled = allowed.indexOf(name) === -1;
       });
     } catch (err) {
-      // Si l'etat n'est pas joignable, on laisse les 4 boutons actifs
-      // pour ne pas bloquer completement la mise en place.
       document.getElementById("setupHint").textContent =
         "Impossible de vérifier le duel actif — vérifiez avant de choisir";
     }
@@ -233,13 +231,13 @@
       return;
     }
 
-    // Equipe eliminee sur cette question
+    // ✅ Equipe a deja repondu ou ne peut plus buzzer sur cette question
     if (eliminated) {
       btn.disabled = true;
-      btn.className = "buzz-btn eliminated";
-      btn.textContent = "ELIMINEE";
-      statusEl.className = "status eliminated";
-      statusEl.innerHTML = '<span class="dot"></span>Mauvaise reponse - en attente de la prochaine question';
+      btn.className = "buzz-btn lost";
+      btn.textContent = "VERROUILLE";
+      statusEl.className = "status lost";
+      statusEl.innerHTML = '<span class="dot"></span>Vous ne pouvez plus buzzer sur cette question';
       return;
     }
 
@@ -278,7 +276,7 @@
     playBuzzSound();
 
     const btn = document.getElementById("buzzBtn");
-    btn.disabled = true; // reponse optimiste immediate
+    btn.disabled = true;
 
     try {
       const res = await fetch(SCRIPT_URL, {
