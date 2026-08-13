@@ -1,0 +1,12 @@
+{
+  "name": "genietech-buzzer",
+  "version": "1.0.0",
+  "description": "GenieTech — Buzzer & Quiz 2026",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve ."
+  },
+  "keywords": ["genietech", "buzzer", "quiz", "haiti", "education"],
+  "author": "Cybermatik",
+  "license": "ISC"
+}
