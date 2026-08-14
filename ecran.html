@@ -5,22 +5,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GenieTech — Grand Écran</title>
 <style>
-:root{--bg:#050914;--text:#f8fafc;--muted:#94a3b8;--green:#22c55e;--red:#ef4444;--gold:#facc15}
+:root{--bg:#050914;--text:#f8fafc;--muted:#94a3b8;--green:#22c55e;--red:#ef4444;--gold:#facc15;--card:#0b1324}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%}
 body{background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif;overflow:hidden}
-.screen{width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4vh 6vw;text-align:center;gap:3vh}
 
-.question{font-size:clamp(20px,2.6vw,40px);line-height:1.4;font-weight:800;max-width:85vw;white-space:pre-line}
+.screen{width:100vw;height:100vh;display:flex;flex-direction:column;padding:2.5vh 4vw;gap:2vh}
 
-.timer{font-size:clamp(40px,6vw,90px);line-height:1;font-weight:900;font-variant-numeric:tabular-nums}
+.scoreRow{display:flex;gap:14px;justify-content:center;flex-shrink:0}
+.scoreCard{flex:1;max-width:280px;background:var(--card);border-radius:12px;padding:1.2vh 12px;text-align:center;border:2px solid transparent}
+.scoreCard.leader{border-color:var(--gold)}
+.scoreCard .name{font-size:clamp(12px,1.3vw,17px);font-weight:700;letter-spacing:.03em}
+.scoreCard .pts{font-size:clamp(22px,3vw,34px);font-weight:900;margin-top:2px}
+.scoreCard.leader .pts{color:var(--gold)}
+.scoreCard:not(.leader) .pts{color:var(--green)}
+
+.main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;gap:2vh}
+
+.question{text-align:center;font-weight:800;line-height:1.35;max-width:92vw;white-space:pre-line;overflow-wrap:break-word;word-break:break-word}
+.question.size-lg{font-size:clamp(24px,3.2vw,46px)}
+.question.size-md{font-size:clamp(20px,2.6vw,36px)}
+.question.size-sm{font-size:clamp(17px,2.1vw,28px)}
+.question.size-xs{font-size:clamp(15px,1.7vw,22px)}
+
+.timer{font-size:clamp(36px,5.5vw,80px);line-height:1;font-weight:900;font-variant-numeric:tabular-nums;flex-shrink:0}
 .timer.running{color:var(--green)}
 .timer.warning{color:var(--gold)}
 .timer.danger{color:var(--red);animation:dangerPulse .8s infinite}
 @keyframes dangerPulse{50%{opacity:.45}}
 .hidden{display:none}
 
-.team{font-size:clamp(20px,3vw,44px);font-weight:900;color:var(--green)}
+.team{font-size:clamp(18px,2.6vw,38px);font-weight:900;color:var(--green);flex-shrink:0}
 .team.buzzIn{animation:buzzIn .35s ease-out}
 @keyframes buzzIn{0%{transform:scale(1.1);opacity:.2}100%{transform:scale(1);opacity:1}}
 
@@ -31,10 +46,22 @@ body{background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-ser
 </style>
 </head>
 <body>
+<canvas id="confettiCanvas" style="position:fixed;inset:0;pointer-events:none;z-index:40"></canvas>
+
 <div class="screen">
-  <div id="question" class="question">En attente de la prochaine question</div>
-  <div id="timer" class="timer hidden">00:00</div>
-  <div id="team" class="team hidden"></div>
+  <div id="normalView" style="display:flex;flex-direction:column;height:100%;gap:2vh">
+    <div id="scoreRow" class="scoreRow"></div>
+    <div class="main">
+      <div id="question" class="question size-lg">En attente de la prochaine question</div>
+      <div id="timer" class="timer hidden">00:00</div>
+      <div id="team" class="team hidden"></div>
+    </div>
+  </div>
+
+  <div id="winnerView" class="hidden" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:2vh">
+    <div style="font-size:clamp(16px,2vw,26px);color:var(--gold);font-weight:800;letter-spacing:.1em;text-transform:uppercase">🏆 Vainqueur du duel</div>
+    <div id="winnerName" class="question size-lg"></div>
+  </div>
 </div>
 
 <div id="connection" class="connection"></div>
@@ -48,6 +75,7 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwITBnp3_airQfBXI5BO
 const POLL_INTERVAL_MS = 500;
 
 let previousTeam = null;
+let previousDuelKey = null;
 let audioCtx = null;
 let soundEnabled = false;
 let firstPoll = true;
@@ -89,15 +117,53 @@ async function poll(){
 }
 
 function applyState(data){
-  document.getElementById('question').textContent =
-    data.questionText || 'En attente de la prochaine question';
-
+  updateScores(data);
+  updateQuestion(data);
   updateTimer(data);
   updateTeam(data);
+  updateDuelWinner(data);
   firstPoll = false;
 }
 
-// Chrono visible UNIQUEMENT quand il tourne réellement (après buzz ou Top Chrono)
+// Scores des 2 équipes du contexte actif (Duel 1 / Duel 2 / Finale)
+function contextTeams(data){
+  const teams = data.teams || [];
+  if(data.phase === 'Finale'){
+    return teams.filter(t => String(t.qualifiee).trim() === 'Oui');
+  }
+  return teams.filter(t => t.duel === data.duel);
+}
+
+function updateScores(data){
+  const row = document.getElementById('scoreRow');
+  const teams = contextTeams(data);
+  row.innerHTML = '';
+  const maxScore = Math.max(...teams.map(t => t.score), -Infinity);
+  teams.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'scoreCard' + (t.score === maxScore && teams.length > 1 ? ' leader' : '');
+    div.innerHTML = '<div class="name">' + escapeHtml(t.equipe) + '</div><div class="pts">' + t.score + '</div>';
+    row.appendChild(div);
+  });
+}
+
+// Taille de police adaptative : plus la question (avec ses options) est
+// longue, plus la police est réduite, pour que tout tienne toujours à
+// l'écran sans jamais être coupé.
+function updateQuestion(data){
+  const q = document.getElementById('question');
+  const text = data.questionText || 'En attente de la prochaine question';
+  q.textContent = text;
+
+  const len = text.length;
+  let sizeClass = 'size-lg';
+  if(len > 260) sizeClass = 'size-xs';
+  else if(len > 160) sizeClass = 'size-sm';
+  else if(len > 80) sizeClass = 'size-md';
+
+  q.className = 'question ' + sizeClass;
+}
+
 function updateTimer(data){
   const timer = document.getElementById('timer');
 
@@ -116,7 +182,6 @@ function updateTimer(data){
   timer.className = 'timer ' + (remaining<=5?'danger':remaining<=10?'warning':'running');
 }
 
-// Équipe qui a buzzé / qui répond - affichée seulement quand pertinent
 function updateTeam(data){
   const team = document.getElementById('team');
   const activeTeam = data.activeTeam || null;
@@ -140,10 +205,105 @@ function updateTeam(data){
   previousTeam = key;
 }
 
+function updateDuelWinner(data){
+  const normalView = document.getElementById('normalView');
+  const winnerView = document.getElementById('winnerView');
+  const winnerName = document.getElementById('winnerName');
+  const winnerLabel = winnerView.querySelector('div');
+
+  const isChampion = !!data.champion;
+  const isDuelWinner = data.duelFinished && data.duelWinner;
+
+  if(isChampion || isDuelWinner){
+    normalView.classList.add('hidden');
+    winnerView.classList.remove('hidden');
+
+    if(isChampion){
+      winnerLabel.textContent = '🏆🏆 CHAMPION DU JEU';
+      winnerName.textContent = data.champion;
+    }else{
+      winnerLabel.textContent = '🏆 Vainqueur du duel';
+      winnerName.textContent = data.duelWinner;
+    }
+
+    const key = isChampion
+      ? 'champion|' + String(data.champion)
+      : String(data.phase) + '|' + String(data.duel) + '|' + String(data.duelWinner);
+    if(key !== previousDuelKey){
+      launchConfetti();
+    }
+    previousDuelKey = key;
+  }else{
+    normalView.classList.remove('hidden');
+    winnerView.classList.add('hidden');
+    previousDuelKey = null;
+  }
+}
+
 function formatTime(seconds){
   const m = Math.floor(seconds/60);
   const s = seconds%60;
   return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+// ============================================================
+// CONFETTIS (canvas, aucune dépendance externe)
+// ============================================================
+function launchConfetti(){
+  const canvas = document.getElementById('confettiCanvas');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const colors = ['#22c55e', '#facc15', '#ef4444', '#3b82f6', '#f8fafc'];
+
+  const pieces = [];
+  for(let i=0; i<160; i++){
+    pieces.push({
+      x: Math.random() * canvas.width,
+      y: -20 - Math.random() * canvas.height * 0.5,
+      w: 6 + Math.random() * 6,
+      h: 8 + Math.random() * 10,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      speedY: 2 + Math.random() * 3,
+      speedX: (Math.random() - 0.5) * 2,
+      rotation: Math.random() * 360,
+      rotationSpeed: (Math.random() - 0.5) * 10
+    });
+  }
+
+  const duration = 4000;
+  const start = Date.now();
+
+  function frame(){
+    const elapsed = Date.now() - start;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    pieces.forEach(p => {
+      p.y += p.speedY;
+      p.x += p.speedX;
+      p.rotation += p.rotationSpeed;
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation * Math.PI / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+
+    if(elapsed < duration){
+      requestAnimationFrame(frame);
+    }else{
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+  requestAnimationFrame(frame);
 }
 
 poll();
