@@ -52,9 +52,9 @@
     background: linear-gradient(180deg, #475569, #1e293b);
     box-shadow: 0 10px 0 #0f172a, 0 14px 24px rgba(0,0,0,0.5);
   }
-  .buzz-btn.eliminated {
-    background: linear-gradient(180deg, #7f1d1d, #450a0a);
-    box-shadow: 0 10px 0 #2a0505, 0 14px 24px rgba(0,0,0,0.5);
+  .buzz-btn.locked {
+    background: linear-gradient(180deg, #475569, #1e293b);
+    box-shadow: 0 10px 0 #0f172a, 0 14px 24px rgba(0,0,0,0.5);
   }
   .buzz-btn.direct {
     background: linear-gradient(180deg, #475569, #1e293b);
@@ -66,7 +66,7 @@
   .status.ready { color: #94a3b8; }
   .status.won { color: #4ade80; }
   .status.lost { color: #f87171; }
-  .status.eliminated { color: #fca5a5; }
+  .status.locked { color: #fca5a5; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: currentColor; margin-right: 8px; vertical-align: middle; }
   .setup { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; padding: 24px; }
   .setup input {
@@ -209,9 +209,15 @@
       lastQuestionId = data.questionId;
     }
 
-    const eliminated = (data.eliminatedTeams || []).indexOf(teamName) !== -1;
+    // ✅ Renommé : une équipe "verrouillée" ne peut plus buzzer/répondre sur
+    // CETTE question (elle a déjà buzzé et raté, ou l'autre équipe répond).
+    // Ce n'est pas une élimination du jeu - juste un verrou pour la question
+    // en cours.
+    const locked = (data.lockedTeams || []).indexOf(teamName) !== -1;
 
     // Question DIRECTE / PROBLEME : pas de buzzer, le jury designe l'equipe
+    // (la sélection peut arriver avant que le jury ne lance le chrono via
+    // "Top Chrono" - dans les deux cas, l'équipe désignée voit "A VOUS")
     if (data.questionType && !data.buzzerEnabled) {
       if (data.activeTeam === teamName) {
         btn.disabled = true;
@@ -231,12 +237,13 @@
       return;
     }
 
-    // ✅ Equipe a deja repondu ou ne peut plus buzzer sur cette question
-    if (eliminated) {
+    // ✅ Equipe verrouillée pour cette question (déjà buzzé/répondu, ou en
+    // attente que l'autre équipe joue)
+    if (locked) {
       btn.disabled = true;
-      btn.className = "buzz-btn lost";
+      btn.className = "buzz-btn locked";
       btn.textContent = "VERROUILLE";
-      statusEl.className = "status lost";
+      statusEl.className = "status locked";
       statusEl.innerHTML = '<span class="dot"></span>Vous ne pouvez plus buzzer sur cette question';
       return;
     }
