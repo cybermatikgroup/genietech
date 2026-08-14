@@ -308,6 +308,18 @@ function launchConfetti(){
 
 poll();
 setInterval(poll, POLL_INTERVAL_MS);
+
+// ✅ Sécurité anti-gel : les navigateurs suspendent parfois l'exécution JS
+// d'un onglet resté longtemps en arrière-plan (économie de mémoire), ce qui
+// fige l'affichage sur un ancien état. Un rechargement complet périodique
+// garantit que l'écran ne reste jamais bloqué plus de quelques minutes.
+setTimeout(() => location.reload(), 3 * 60 * 1000);
+
+// Complément léger : force un poll immédiat dès que l'onglet redevient
+// visible (utile si le gel est partiel, avant le rechargement de sécurité).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') poll();
+});
 </script>
 </body>
 </html>
