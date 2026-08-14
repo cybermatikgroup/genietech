@@ -71,6 +71,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .loginCard button{width:100%;padding:14px;border-radius:12px;border:none;background:var(--blue);color:white;font-weight:800;font-size:15px;cursor:pointer}
 .loginError{color:var(--red);font-size:13px;font-weight:700;min-height:18px;margin-bottom:4px}
 .hidden{display:none !important}
+
+.duelBanner{padding:16px;border-radius:14px;font-weight:800;font-size:15px;text-align:center;box-shadow:var(--shadow)}
+.duelBanner.winner{background:var(--goldBg);color:var(--gold);border:2px solid var(--gold)}
+.duelBanner.tie{background:var(--redBg);color:var(--red);border:2px solid #fca5a5}
 </style>
 </head>
 <body>
@@ -108,6 +112,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   <div class="card">
     <h3>Scores</h3>
     <div class="scoreRow" id="scoreRow"></div>
+  </div>
+
+  <div id="duelBanner" class="duelBanner hidden"></div>
+  <div id="championPickZone" class="card hidden">
+    <h3>Égalité parfaite — désignez le champion</h3>
+    <div class="teamPickRow" id="championPickRow"></div>
   </div>
 
   <div class="card">
@@ -202,6 +212,55 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
     renderScores(data);
     renderQuestion(data);
+    renderDuelBanner(data);
+    renderChampionPick(data);
+  }
+
+  function renderDuelBanner(data){
+    const banner = document.getElementById('duelBanner');
+    if(data.champion){
+      banner.className = 'duelBanner winner';
+      banner.textContent = '🏆🏆 ' + data.champion + ' remporte la Finale et devient CHAMPION du jeu ! 🎉';
+    }else if(data.duelFinished && data.duelWinner){
+      banner.className = 'duelBanner winner';
+      banner.textContent = '🏆 ' + data.duelWinner + ' remporte le duel et est qualifiée pour la Finale ! Cliquez sur le contexte suivant (Duel 2 / Finale) pour continuer.';
+    }else if(data.finaleTie){
+      banner.className = 'duelBanner tie';
+      banner.textContent = '⚖️ Égalité parfaite en Finale — désignez le champion ci-dessous.';
+    }else if(data.duelFinished && data.duelTie){
+      banner.className = 'duelBanner tie';
+      banner.textContent = '⚖️ Égalité totale même après la Subsidiaire — qualifiez l\'équipe manuellement si besoin.';
+    }else if(data.duelNeedsSubsidiaire){
+      banner.className = 'duelBanner tie';
+      banner.textContent = '⚖️ Égalité entre les deux équipes — lancez la question Subsidiaire pour départager.';
+    }else{
+      banner.className = 'duelBanner hidden';
+      return;
+    }
+    banner.classList.remove('hidden');
+  }
+
+  // ✅ Sélection manuelle du champion, uniquement en cas d'égalité parfaite
+  // en fin de Finale (pas de Subsidiaire disponible à ce stade)
+  function renderChampionPick(data){
+    const zone = document.getElementById('championPickZone');
+    const row = document.getElementById('championPickRow');
+
+    if(!data.finaleTie || data.champion){
+      zone.classList.add('hidden');
+      return;
+    }
+
+    zone.classList.remove('hidden');
+    row.innerHTML = '';
+    const teams = contextTeams(data);
+    teams.forEach(t => {
+      const b = document.createElement('button');
+      b.className = 'teamPickBtn';
+      b.textContent = escapeHtml(t.equipe);
+      b.onclick = () => declareChampion(t.equipe);
+      row.appendChild(b);
+    });
   }
 
   function contextTeams(data){
@@ -257,7 +316,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       teamPickZone.style.display = 'none';
       btnCorrect.disabled = true;
       btnWrong.disabled = true;
-      btnStart.disabled = false;
+      btnStart.disabled = !!data.duelFinished || !!data.champion || !!data.finaleTie;
       btnSkip.disabled = true;
       return;
     }
@@ -283,7 +342,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     // chrono), puis clique "Top Chrono" quand l'équipe est prête à
     // répondre - c'est ce clic qui démarre les 10 secondes.
     if(data.questionType && !data.buzzerEnabled){
-      btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
+      btnStart.disabled = (data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE') || !!data.duelFinished || !!data.champion || !!data.finaleTie;
       btnSkip.disabled = true;
 
       if(data.etat === 'QUESTION_ACTIVE' && !data.activeTeam){
@@ -339,7 +398,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     // BUZZ / SUBSIDIAIRE - inchangé (chrono 15s visible dès l'affichage)
     // ============================================================
     teamPickZone.style.display = 'none';
-    btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
+    btnStart.disabled = (data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE') || !!data.duelFinished || !!data.champion || !!data.finaleTie;
 
     // ✅ Message "Équipe B a la main" en Phase 3 (attente illimitée, pas de chrono)
     if(data.tempsPhase === 'ATTENTE_SECOND'){
@@ -422,6 +481,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
   function assignDirect(equipe){ callAction({ action:'assignDirect', equipe:equipe }); }
   function topChrono(){ callAction({ action:'topChrono' }); }
+  function declareChampion(equipe){ callAction({ action:'declareChampion', equipe:equipe }); }
   function markCorrect(){ callAction({ action:'correct' }); }
   function markWrong(){ callAction({ action:'wrong' }); }
   function setContext(phase,duel){ callAction({ action:'setContext', phase:phase, duel:duel }); }
