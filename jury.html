@@ -47,6 +47,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .btn.bad{background:#dc2626}
 .btn.neutral{background:#64748b}
 .btn.skip{background:#8b5cf6}
+.btn.topchrono{background:#a16207}
 .btn:disabled{opacity:.35;cursor:default;box-shadow:none}
 .btn:active:not(:disabled){transform:translateY(2px)}
 
@@ -60,10 +61,32 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
 .dangerZone{opacity:.85}
 .dangerZone button{background:var(--redBg);color:var(--red);border:1px solid #fecaca;box-shadow:none}
+
+/* Écran de connexion (mot de passe) */
+.loginScreen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.loginCard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px 24px;box-shadow:var(--shadow);max-width:340px;width:100%;text-align:center}
+.loginCard .brand{margin-bottom:4px}
+.loginCard h2{font-size:18px;font-weight:800;margin:6px 0 18px}
+.loginCard input{width:100%;padding:14px 16px;font-size:16px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--text);margin-bottom:12px}
+.loginCard button{width:100%;padding:14px;border-radius:12px;border:none;background:var(--blue);color:white;font-weight:800;font-size:15px;cursor:pointer}
+.loginError{color:var(--red);font-size:13px;font-weight:700;min-height:18px;margin-bottom:4px}
+.hidden{display:none !important}
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<!-- ✅ Écran de connexion - accès jury protégé par mot de passe (côté client) -->
+<div id="loginScreen" class="loginScreen">
+  <div class="loginCard">
+    <div class="brand">GENIETECH · JURY</div>
+    <h2>Accès protégé</h2>
+    <input type="password" id="loginPassword" placeholder="Mot de passe" autocomplete="off">
+    <div class="loginError" id="loginError"></div>
+    <button onclick="checkPassword()">Entrer</button>
+  </div>
+</div>
+
+<div id="app" class="wrap hidden">
 
   <div class="topbar">
     <div class="brand">GENIETECH · JURY</div>
@@ -100,6 +123,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div class="teamPickRow" id="teamPickRow"></div>
     </div>
 
+    <div class="btnRow" style="margin-top:8px">
+      <button class="btn topchrono" id="btnTopChrono" onclick="topChrono()" style="display:none">⏱️ Top Chrono</button>
+    </div>
+
     <div class="btnRow" style="margin-top:12px">
       <button class="btn primary" id="btnStart" onclick="startQuestion()">Question suivante</button>
       <button class="btn skip" id="btnSkip" onclick="skipQuestion()">Passer</button>
@@ -120,14 +147,40 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 
 <script>
   // ==== A CONFIGURER ====
-  const SCRIPT_URL = "REMPLACER_PAR_URL_APPS_SCRIPT";
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyuJMaKi6EvPAlEGRKmtxV994zRJz36m12iD9nSJPzglmi3gDxW1zgyTGEgAISwfpgZNg/exec";
   const POLL_INTERVAL_MS = 1000;
   // =======================
+
+  // ✅ Mot de passe d'accès (protection simple côté client, suffisante pour
+  // un jeu en présentiel d'1h - n'empêche pas un accès technique direct à l'API)
+  const JURY_PASSWORD = "@juryJeu26*";
+  let authenticated = false;
+
+  function checkPassword(){
+    const input = document.getElementById('loginPassword');
+    const error = document.getElementById('loginError');
+    if(input.value === JURY_PASSWORD){
+      authenticated = true;
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      poll();
+      setInterval(poll, POLL_INTERVAL_MS);
+    }else{
+      error.textContent = 'Mot de passe incorrect';
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  document.getElementById('loginPassword').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') checkPassword();
+  });
 
   let lastState = null;
   let busy = false;
 
   async function poll(){
+    if(!authenticated) return;
     const conn = document.getElementById('connText');
     try{
       const res = await fetch(SCRIPT_URL + '?jury=1&t=' + Date.now(), { method:'GET', cache:'no-store' });
@@ -184,9 +237,14 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     const btnWrong = document.getElementById('btnWrong');
     const btnStart = document.getElementById('btnStart');
     const btnSkip = document.getElementById('btnSkip');
+    const btnTopChrono = document.getElementById('btnTopChrono');
 
     // ✅ Mise à jour du chrono
     updateTimer(data);
+
+    // Par défaut, Top Chrono est caché - affiché seulement dans le cas précis
+    // "question DIRECTE/PROBLEME, équipe sélectionnée, chrono pas encore lancé"
+    btnTopChrono.style.display = 'none';
 
     if(!data.questionId){
       qMeta.innerHTML = '';
@@ -215,16 +273,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       qAnswer.style.display = 'none';
     }
 
-    // ✅ Message en fonction de la phase
     btnSkip.disabled = false;
 
-    // Question DIRECTE / PROBLEME
+    // ============================================================
+    // Question DIRECTE / PROBLEME - système "Top Chrono"
+    // ============================================================
+    // La question s'affiche et reste affichée SANS chrono pendant que
+    // l'animateur la lit. Le jury sélectionne l'équipe (sans lancer de
+    // chrono), puis clique "Top Chrono" quand l'équipe est prête à
+    // répondre - c'est ce clic qui démarre les 10 secondes.
     if(data.questionType && !data.buzzerEnabled){
       btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
       btnSkip.disabled = true;
-      if(data.etat === 'QUESTION_ACTIVE'){
+
+      if(data.etat === 'QUESTION_ACTIVE' && !data.activeTeam){
+        // En attente de sélection (1ère question du contexte, ou retry en
+        // Finale après un échec : l'équipe qui a déjà raté est exclue)
         teamPickZone.style.display = 'block';
-        const teams = contextTeams(data);
+        const already = data.lockedTeams || [];
+        const teams = contextTeams(data).filter(t => already.indexOf(t.equipe) === -1);
         teamPickRow.innerHTML = '';
         const maxScore = Math.max(...teams.map(t=>t.score), -Infinity);
         teams.forEach(t=>{
@@ -237,8 +304,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
         activeLine.style.display = 'none';
         btnCorrect.disabled = true;
         btnWrong.disabled = true;
-        msg.textContent = 'Sélectionnez l\'équipe qui répond';
+        msg.textContent = data.messageEcran || 'Sélectionnez l\'équipe qui répond';
+      }else if(data.etat === 'QUESTION_ACTIVE' && data.activeTeam){
+        // Équipe sélectionnée, chrono pas encore lancé - on attend le clic
+        // "Top Chrono" (l'animateur est en train de terminer sa lecture /
+        // de poser la question à voix haute)
+        teamPickZone.style.display = 'none';
+        activeLine.style.display = 'block';
+        activeLine.textContent = data.activeTeam + ' sélectionnée';
+        btnCorrect.disabled = true;
+        btnWrong.disabled = true;
+        btnTopChrono.style.display = 'block';
+        btnTopChrono.disabled = false;
+        msg.textContent = data.messageEcran || 'Cliquez sur Top Chrono quand l\'équipe est prête';
       }else if(data.etat === 'BUZZ_RECU'){
+        // Chrono lancé, l'équipe répond
         teamPickZone.style.display = 'none';
         activeLine.style.display = 'block';
         activeLine.textContent = data.activeTeam + ' répond';
@@ -255,15 +335,17 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       return;
     }
 
-    // BUZZ / SUBSIDIAIRE
+    // ============================================================
+    // BUZZ / SUBSIDIAIRE - inchangé (chrono 15s visible dès l'affichage)
+    // ============================================================
     teamPickZone.style.display = 'none';
     btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
 
     // ✅ Message "Équipe B a la main" en Phase 3
     if(data.tempsPhase === 'ATTENTE_SECOND'){
       const teams = contextTeams(data);
-      const alreadyAnswered = data.eliminatedTeams || [];
-      const otherTeam = teams.find(t => alreadyAnswered.indexOf(t.equipe) === -1);
+      const already = data.lockedTeams || [];
+      const otherTeam = teams.find(t => already.indexOf(t.equipe) === -1);
       if(otherTeam){
         msg.textContent = '⏳ ' + otherTeam.equipe + ' a la main (' + getRemainingTime(data) + 's)';
       } else {
@@ -347,6 +429,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   }
 
   function assignDirect(equipe){ callAction({ action:'assignDirect', equipe:equipe }); }
+  function topChrono(){ callAction({ action:'topChrono' }); }
   function markCorrect(){ callAction({ action:'correct' }); }
   function markWrong(){ callAction({ action:'wrong' }); }
   function setContext(phase,duel){ callAction({ action:'setContext', phase:phase, duel:duel }); }
@@ -362,8 +445,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     return div.innerHTML;
   }
 
-  poll();
-  setInterval(poll, POLL_INTERVAL_MS);
+  // Le polling ne démarre qu'après authentification (voir checkPassword())
 </script>
 </body>
 </html>
