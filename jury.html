@@ -341,13 +341,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     teamPickZone.style.display = 'none';
     btnStart.disabled = data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE';
 
-    // ✅ Message "Équipe B a la main" en Phase 3
+    // ✅ Message "Équipe B a la main" en Phase 3 (attente illimitée, pas de chrono)
     if(data.tempsPhase === 'ATTENTE_SECOND'){
       const teams = contextTeams(data);
       const already = data.lockedTeams || [];
       const otherTeam = teams.find(t => already.indexOf(t.equipe) === -1);
       if(otherTeam){
-        msg.textContent = '⏳ ' + otherTeam.equipe + ' a la main (' + getRemainingTime(data) + 's)';
+        msg.textContent = '⏳ ' + otherTeam.equipe + ' a la main';
       } else {
         msg.textContent = data.messageEcran || '';
       }
@@ -367,14 +367,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       btnCorrect.disabled = true;
       btnWrong.disabled = true;
     }
-  }
-
-  // ✅ Fonction pour récupérer le temps restant
-  function getRemainingTime(data){
-    if(data.questionEndAt != null && data.questionActive){
-      return Math.max(0, Math.ceil((data.questionEndAt - Date.now()) / 1000));
-    }
-    return 0;
   }
 
   // ✅ Mise à jour du chrono
