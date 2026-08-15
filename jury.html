@@ -47,7 +47,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .btn.bad{background:#dc2626}
 .btn.neutral{background:#64748b}
 .btn.skip{background:#8b5cf6}
-.btn.topchrono{background:#a16207}
 .btn:disabled{opacity:.35;cursor:default;box-shadow:none}
 .btn:active:not(:disabled){transform:translateY(2px)}
 
@@ -75,6 +74,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .duelBanner{padding:16px;border-radius:14px;font-weight:800;font-size:15px;text-align:center;box-shadow:var(--shadow)}
 .duelBanner.winner{background:var(--goldBg);color:var(--gold);border:2px solid var(--gold)}
 .duelBanner.tie{background:var(--redBg);color:var(--red);border:2px solid #fca5a5}
+
+.timerStatus{text-align:center;font-size:13px;font-weight:700;padding:8px;border-radius:10px;margin-top:8px}
+.timerStatus.running{background:var(--greenBg);color:var(--green)}
+.timerStatus.stopped{background:var(--panel2);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -133,9 +136,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       <div class="teamPickRow" id="teamPickRow"></div>
     </div>
 
-    <div class="btnRow" style="margin-top:8px">
-      <button class="btn topchrono" id="btnTopChrono" onclick="topChrono()" style="display:none">⏱️ Top Chrono</button>
-    </div>
+    <div id="timerStatus" class="timerStatus" style="display:none"></div>
 
     <div class="btnRow" style="margin-top:12px">
       <button class="btn primary" id="btnStart" onclick="startQuestion()">Question suivante</button>
