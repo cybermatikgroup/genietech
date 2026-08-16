@@ -297,14 +297,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     const btnWrong = document.getElementById('btnWrong');
     const btnStart = document.getElementById('btnStart');
     const btnSkip = document.getElementById('btnSkip');
-    const btnTopChrono = document.getElementById('btnTopChrono');
+    const timerStatus = document.getElementById('timerStatus');
 
     // ✅ Mise à jour du chrono
     updateTimer(data);
-
-    // Par défaut, Top Chrono est caché - affiché seulement dans le cas précis
-    // "question DIRECTE/PROBLEME, équipe sélectionnée, chrono pas encore lancé"
-    btnTopChrono.style.display = 'none';
+    renderTimerStatus(data);
 
     if(!data.questionId){
       qMeta.innerHTML = '';
@@ -336,19 +333,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     btnSkip.disabled = false;
 
     // ============================================================
-    // Question DIRECTE / PROBLEME - système "Top Chrono"
+    // Question DIRECTE / PROBLEME
     // ============================================================
-    // La question s'affiche et reste affichée SANS chrono pendant que
-    // l'animateur la lit. Le jury sélectionne l'équipe (sans lancer de
-    // chrono), puis clique "Top Chrono" quand l'équipe est prête à
-    // répondre - c'est ce clic qui démarre les 10 secondes.
+    // La question s'affiche sans chrono pendant la lecture. Le jury
+    // sélectionne l'équipe (1ère question d'un Duel ou de la Finale
+    // seulement - les suivantes en Finale sont désignées automatiquement
+    // par le système). Une fois l'équipe désignée, le jury peut cliquer
+    // Bonne/Mauvaise réponse à tout moment - le chrono (géré par le Juré
+    // Timer sur sa propre page) n'a plus d'impact sur cette décision.
     if(data.questionType && !data.buzzerEnabled){
       btnStart.disabled = (data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE') || !!data.duelFinished || !!data.champion || !!data.finaleTie;
       btnSkip.disabled = true;
 
       if(data.etat === 'QUESTION_ACTIVE' && !data.activeTeam){
-        // En attente de sélection (1ère question du contexte, ou retry en
-        // Finale après un échec : l'équipe qui a déjà raté est exclue)
+        // En attente de sélection manuelle (Duel, ou 1ère question de Finale)
         teamPickZone.style.display = 'block';
         const already = data.lockedTeams || [];
         const teams = contextTeams(data).filter(t => already.indexOf(t.equipe) === -1);
@@ -365,23 +363,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
         btnCorrect.disabled = true;
         btnWrong.disabled = true;
         msg.textContent = data.messageEcran || 'Sélectionnez l\'équipe qui répond';
-      }else if(data.etat === 'QUESTION_ACTIVE' && data.activeTeam){
-        // Équipe sélectionnée, chrono pas encore lancé - on attend le clic
-        // "Top Chrono" (l'animateur est en train de terminer sa lecture /
-        // de poser la question à voix haute)
-        teamPickZone.style.display = 'none';
-        activeLine.style.display = 'block';
-        activeLine.textContent = data.activeTeam + ' sélectionnée';
-        btnCorrect.disabled = true;
-        btnWrong.disabled = true;
-        btnTopChrono.style.display = 'block';
-        btnTopChrono.disabled = false;
-        msg.textContent = data.messageEcran || 'Cliquez sur Top Chrono quand l\'équipe est prête';
       }else if(data.etat === 'BUZZ_RECU'){
-        // Chrono lancé, l'équipe répond
+        // Équipe désignée (manuellement ou automatiquement) - le jury peut
+        // juger à tout moment, que le chrono tourne ou non
         teamPickZone.style.display = 'none';
         activeLine.style.display = 'block';
-        activeLine.textContent = data.activeTeam + ' répond';
+        activeLine.textContent = data.activeTeam;
         btnCorrect.disabled = false;
         btnWrong.disabled = false;
         msg.textContent = data.messageEcran || '';
@@ -396,7 +383,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     }
 
     // ============================================================
-    // BUZZ / SUBSIDIAIRE - inchangé (chrono 15s visible dès l'affichage)
+    // BUZZ / SUBSIDIAIRE
     // ============================================================
     teamPickZone.style.display = 'none';
     btnStart.disabled = (data.etat !== 'TERMINEE' && data.etat !== 'EN_ATTENTE') || !!data.duelFinished || !!data.champion || !!data.finaleTie;
@@ -411,21 +398,37 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       } else {
         msg.textContent = data.messageEcran || '';
       }
-    } else if(data.activeTeam){
-      msg.textContent = data.messageEcran || '';
     } else {
       msg.textContent = data.messageEcran || '';
     }
 
     if(data.activeTeam){
       activeLine.style.display = 'block';
-      activeLine.textContent = data.activeTeam + ' a buzzé';
+      activeLine.textContent = data.activeTeam;
       btnCorrect.disabled = false;
       btnWrong.disabled = false;
     }else{
       activeLine.style.display = 'none';
       btnCorrect.disabled = true;
       btnWrong.disabled = true;
+    }
+  }
+
+  // ✅ Indicateur informatif de l'état du chrono, géré par le Juré Timer sur
+  // sa propre page - purement visuel ici, n'affecte aucune décision du jury.
+  function renderTimerStatus(data){
+    const el = document.getElementById('timerStatus');
+    if(!data.activeTeam){
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'block';
+    if(data.timerRunning){
+      el.className = 'timerStatus running';
+      el.textContent = '⏱️ Chrono en cours (Juré Timer)';
+    }else{
+      el.className = 'timerStatus stopped';
+      el.textContent = '⏸️ Chrono à l\'arrêt - en attente du Juré Timer';
     }
   }
 
@@ -481,7 +484,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
   }
 
   function assignDirect(equipe){ callAction({ action:'assignDirect', equipe:equipe }); }
-  function topChrono(){ callAction({ action:'topChrono' }); }
   function declareChampion(equipe){ callAction({ action:'declareChampion', equipe:equipe }); }
   function markCorrect(){ callAction({ action:'correct' }); }
   function markWrong(){ callAction({ action:'wrong' }); }
